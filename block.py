@@ -3,8 +3,9 @@ import sys
 import os
 import hashlib
 import json
+import pickle
 from PoW import Proof_of_Work
-from db import store_to_db_json
+from db import store_to_db_json, store_to_db_pkl
 
 # Create block class (para: prevHash, height, transaction)
 class Block:
@@ -53,17 +54,26 @@ if __name__ == '__main__':
         # 字串分成三部分
         parse_cmd = cmd.split(' ', 2) 
         if (cmd == '-h'):
-            print('Add a block:         \"addblock -transaction {transaction message}\"')
-            print('Print a block chain: \"printchain\"')
-            print('Print specific height in a block chain: follow the step after entering instruction \"printchain\"')
-            print('Exit the execution:  \"exit\" (It will go back to the previous structure.)')
+            print('Add a block:                   \"addblock -transaction {transaction message}\"')
+            print('Print a block chain:           \"printchain\"')
+            print('Print height of the chain:     \"printheight\"')
+            print('Print specific height block:   \"printblock -height {(int)height}\"')
+            print('Exit the execution:            \"exit\" (It will go back to the previous structure.)')
         # "addblock -transaction": 判斷式改用split, 看list[0], list[1]是不是 "addblock", "-transaction"
         elif (len(parse_cmd) == 3) and (parse_cmd[0] == "addblock") and (parse_cmd[1] == "-transaction"):
             count = 1
             trans = parse_cmd[2]
-            print('Mining the Genesis block...')
-            genesis = Block_Chain(trans)
-            print('Finish mining a block...\n')
+            if (len(os.listdir('database')) == 0):
+                print('Mining the Genesis block...')
+                genesis = Block_Chain(trans)
+                print('Finish mining a block...\n')
+            else:
+                print('Mining a new block...')
+                with open('database/Block_Chain.pkl', 'rb') as f:
+                    genesis = pickle.load(f)
+                block = Block_Chain.add_new_block(genesis, trans)
+                count += 1
+                print('Finish mining a block...\n')
             while True:
                 mine = input('Do you want to mine a block ?\n[y/n]: ')
                 if (mine in ['n', 'N']):
@@ -79,47 +89,32 @@ if __name__ == '__main__':
                 elif (mine not in ['y', 'n', 'Y', 'N']): 
                     continue
             # store to database_json
-            file_name_json = 'database/Block_Chain_' + str(len(os.listdir('database')) + 1) + '.json'
-            num_json = 'Block_Chain_' + str(len(os.listdir('database')) + 1)
-            store_to_db_json(file_name_json, genesis, num_json)
+            file_name_json = 'database/Block_Chain.json'
+            store_to_db_json(file_name_json, genesis)
+            # store to database_json
+            file_name_pickle = 'database/Block_Chain.pkl'
+            store_to_db_pkl(file_name_pickle, genesis)
         # 印出目前有哪些編號的block chain, 請他選一個, 再問他要不要印出特定高度
-        elif (cmd == "printchain"):
-            mark = 0
-            while (mark == 0):
-                print('\nHere is all files in the database, please enter the block chain file name to print:')
-                files = os.listdir('database')
-                f_name = ''
-                for file in files:
-                    f_name += file.strip('.json')
-                    f_name += '  '
-                temp = f_name + "\n\n[Enter]: "
-                input_list = f_name.split('  ')
-                input_name = input(temp)
-                if (input_name in input_list):
-                    mark_height = 0
-                    while (mark_height == 0):
-                        print_height = input('Do you want to specify height to print ?\n[y/n]: ')
-                        if (print_height == 'y'):
-                            while (mark_height == 0):
-                                block_name = 'database/' + input_name + '.json'
-                                with open(block_name, 'r') as f:
-                                    json_data = json.load(f)
-                                h = input('Please enter the valid height (height = 0 ~ %d here): ' % (len(json_data)-1))
-                                if (h.isdigit()) and (0 <= eval(h) <= len(json_data)-1):
-                                    print(json.dumps(json_data[input_name][eval(h)], indent=2))
-                                    mark_height = 1
-                        elif (print_height == 'n'):
-                            block_name = 'database/' + input_name + '.json'
-                            with open(block_name, 'r') as f:
-                                json_data = json.load(f)
-                            print(json.dumps(json_data, indent=2))
-                        else:
-                            continue
-                    mark = 1
-                elif (input_name == 'exit'):
-                    break
-                else:
-                    continue
+        elif (cmd == "printchain"):    
+            block_name = 'database/Block_Chain.json'
+            with open(block_name, 'r') as f:
+                json_data = json.load(f)
+            print(json.dumps(json_data, indent=2))
+        elif (cmd == "printheight"):
+            block_name = 'database/Block_Chain.json'
+            with open(block_name, 'r') as f:
+                json_data = json.load(f)
+            print(len(json_data['Block_Chain']))
+        elif (len(parse_cmd) == 3) and (parse_cmd[0] == "printblock") and (parse_cmd[1] == "-height") and (parse_cmd[2].isdigit() == True):
+            h = parse_cmd[2]
+            block_name = 'database/Block_Chain.json'
+            with open(block_name, 'r') as f:
+                json_data = json.load(f)
+            h_bound = len(json_data['Block_Chain'])
+            if (0 <= eval(h) < h_bound):
+                print(json.dumps(json_data['Block_Chain'][eval(h)], indent=2))
+            else: 
+                print('h must be between 0 to %d' % (h_bound-1))
         elif (cmd == "exit"):
             break
         else:
